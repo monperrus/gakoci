@@ -200,6 +200,10 @@ class GakoCI:
             threading.Thread(target=GakoCI.execute, args=(
                 self, s, event_action)).start()
 
+    def get_script_timeout_in_seconds(self):
+        """ can be overridden by subclasses """
+        return 60*10 # 10 minutes
+
     def execute(self, s, event_action):
         try:
             self.lock.acquire(True)
@@ -214,7 +218,10 @@ class GakoCI:
                 cwd=cwd,
                 stdout=DEVNULL, stderr=DEVNULL
             )
+            timer = threading.Timer(self.get_script_timeout_in_seconds(), proc.kill)
+            timer.start()
             proc.wait()
+            timer.cancel()
             # set failed status if a hook failed
             set_commit_status({
                 'statuses_url': event_action.meta_info['statuses_url'],
