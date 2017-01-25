@@ -88,7 +88,7 @@ class PullRequestAction(EventAction):
         return self.scripts
 
     def arguments(self):
-        return [self.payload_path, self.meta_info['event_type'], self.meta_info['owner'], self.meta_info['repo'], self.meta_info['branch'], self.meta_info['commit'], self.meta_info['base_owner'], self.meta_info['base_repo']]
+        return [self.payload_path, self.meta_info['event_type'], self.meta_info['owner'], self.meta_info['repo'], self.meta_info['branch'], self.meta_info['commit'], self.meta_info['base_owner'], self.meta_info['base_repo'], self.meta_info['pr_number']]
 
 
 def get_core_info_push_file(json_path):
@@ -132,6 +132,7 @@ def get_core_info_pull_request_str(json_data):
         'branch': json_data['pull_request']['head']['ref'] if 'ref' in json_data['pull_request']['head'] else "unknown",
         'commit': json_data['pull_request']['head']['sha'] if 'sha' in json_data['pull_request']['head'] else "unknown",
         'statuses_url': json_data['pull_request']['statuses_url'] if 'statuses_url' in json_data['pull_request'] else "unknown",
+        'pr_number': json_data['pull_request']['number'] if 'number' in json_data['pull_request'] else "unknown"
     }
 
 
