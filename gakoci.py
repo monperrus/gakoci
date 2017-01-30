@@ -132,7 +132,7 @@ def get_core_info_pull_request_str(json_data):
         'branch': json_data['pull_request']['head']['ref'] if 'ref' in json_data['pull_request']['head'] else "unknown",
         'commit': json_data['pull_request']['head']['sha'] if 'sha' in json_data['pull_request']['head'] else "unknown",
         'statuses_url': json_data['pull_request']['statuses_url'] if 'statuses_url' in json_data['pull_request'] else "unknown",
-        'pr_number': json_data['pull_request']['number'] if 'number' in json_data['pull_request'] else "unknown"
+        'pr_number': str(json_data['pull_request']['number']) if 'number' in json_data['pull_request'] else "unknown"
     }
 
 

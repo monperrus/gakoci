@@ -2,11 +2,11 @@
 Test Suite for GakoCI
 
 Usage: 
-create an API token
-export GITHUB_AUTH_TOKEN=<your token>
-create a test repo called 'test-repo'
-change YOU=<login> below
-python3 -m unittest test
+- create a test repo called 'test-repo'
+- create an API token
+- export GITHUB_AUTH_USER=<username> (eg export GITHUB_AUTH_USER=monperrus)
+- export GITHUB_AUTH_TOKEN=<your token>
+- python3 -m unittest test
 """
 import unittest
 import os
@@ -19,8 +19,7 @@ import gakoci
 import json
 import uuid
 
-YOU = "surli"
-
+YOU = os.environ['GITHUB_AUTH_USER']
 
 def create_pull_request(args):
     """ 
