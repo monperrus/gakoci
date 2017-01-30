@@ -19,7 +19,7 @@ import gakoci
 import json
 import uuid
 
-YOU = "monperrus"
+YOU = "surli"
 
 
 def create_pull_request(args):
@@ -77,6 +77,7 @@ class HelperTestCase(unittest.TestCase):
             'test/resources/pull_request_event.json')['commit'])
         self.assertEqual("https://api.github.com/repos/INRIA/spoon/statuses/e640b870f24eb7fc1078d36a4657b556874119e5",
                          gakoci.get_core_info_pull_request_file('test/resources/pull_request_event.json')['statuses_url'])
+        self.assertEqual("930", gakoci.get_core_info_pull_request_file('test/resources/pull_request_event.json')['pr_number'])
 
 
 class CoreTestCase(unittest.TestCase):

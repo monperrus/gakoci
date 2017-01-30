@@ -61,9 +61,22 @@ Push hook files take 6 arguments:
     <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1>
     push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
-Pull-request hook files take 8 arguments:
+Be careful, the arguments are used in bash script file, then counting args start at 1 for payload.json.
 
-    <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1> <base_owner> <base_repo>
+Typical pull request job for Java/Maven use the PR branch retrieved on Github (see GitHub instruction [here](https://help.github.com/articles/checking-out-pull-requests-locally/)):
+
+    #!/bin/bash
+    git init
+    echo git://github.com/$4/$5.git
+    git remote -v add -t $5 origin git://github.com/$3/$4.git
+    git fetch origin pull/$9/head:gakoci
+    git checkout gakoci
+    mvn clean test 2>&1 | tee trace.txt
+    exit ${PIPESTATUS[0]}
+
+Pull-request hook files take 9 arguments:
+
+    <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1> <base_owner> <base_repo> <pr_number>
 
 
 ## Motivation
