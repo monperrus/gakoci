@@ -223,6 +223,14 @@ class GakoCI:
             timer.start()
             proc.wait()
             timer.cancel()
+
+            # try to get status from status.txt file
+            if os.path.isfile(cwd + "/status.txt"):
+                with os.open(cwd + "/status.txt") as pf:
+                    description = pf.readline()
+            else:
+                description = cwd
+
             # set failed status if a hook failed
             set_commit_status({
                 'statuses_url': event_action.meta_info['statuses_url'],
@@ -230,7 +238,7 @@ class GakoCI:
                 'state': 'success' if proc.returncode == 0 else 'failure',
                 'context': os.path.basename(s),
                 'target_url': self.public_url + '/traces/' + os.path.basename(cwd),
-                'description': cwd
+                'description': description
             }
             )
         finally:
