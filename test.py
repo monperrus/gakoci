@@ -18,8 +18,7 @@ import time
 import gakoci
 import json
 import uuid
-
-YOU = os.environ['GITHUB_AUTH_USER']
+import builtins
 
 def create_pull_request(args):
     """ 
@@ -81,12 +80,18 @@ class HelperTestCase(unittest.TestCase):
 
 class CoreTestCase(unittest.TestCase):
     """ test the server using Ngrok (works on localhost and travis) """
-    owner = YOU
     repo_name = "test-repo"
-    repo_path = owner + "/" + repo_name
     """ python3 -m unittest test.CoreTestCase """
 
     def setUp(self):
+        if os.path.exists('gakoci_config.py'):
+            import gakoci_config
+            if 'GITHUB_AUTH_USER' in dir(builtins): os.environ['GITHUB_AUTH_USER'] = builtins.GITHUB_AUTH_USER
+            if 'GITHUB_AUTH_TOKEN' in dir(builtins): os.environ['GITHUB_AUTH_TOKEN'] = builtins.GITHUB_AUTH_TOKEN
+            if 'NGROK_AUTH_TOKEN' in dir(builtins): os.environ['NGROK_AUTH_TOKEN'] = builtins.NGROK_AUTH_TOKEN
+        CoreTestCase.owner = os.environ['GITHUB_AUTH_USER']
+        CoreTestCase.repo_path = CoreTestCase.owner + "/" + CoreTestCase.repo_name
+
         self.setUp_github()
         self.setUp_local()
         self.setUp_flask()

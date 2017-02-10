@@ -154,8 +154,8 @@ class GakoCI:
     Usage: GakoCI(github_token="khkjhkjf", repos = ["monperrus/test-repo"]).run()
     """
 
-    def __init__(self, repos, github_token=os.environ["GITHUB_AUTH_TOKEN"], host="127.0.0.1", port=5000, hooks_dir='./hooks'):
-        self.github_token = github_token
+    def __init__(self, repos, github_token="", host="127.0.0.1", port=5000, hooks_dir='./hooks'):
+        self.github_token = github_token if github_token != "" else os.environ["GITHUB_AUTH_TOKEN"]
         self.repos = repos
         self.host = host
         self.port = port
