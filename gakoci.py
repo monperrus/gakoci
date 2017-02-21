@@ -226,7 +226,7 @@ class GakoCI:
 
             # try to get status from status.txt file
             if os.path.isfile(cwd + "/status.txt"):
-                with os.open(cwd + "/status.txt", 'rb') as pf:
+                with os.open(cwd + "/status.txt", os.O_RDONLY) as pf:
                     description = pf.readline()
             else:
                 description = cwd
