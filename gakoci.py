@@ -224,12 +224,14 @@ class GakoCI:
             proc.wait()
             timer.cancel()
 
+            description = cwd
             # try to get status from status.txt file
             if os.path.isfile(cwd + "/status.txt"):
-                with os.open(cwd + "/status.txt", os.O_RDONLY) as pf:
-                    description = pf.readline()
-            else:
-                description = cwd
+                try:
+                    with open(cwd + "/status.txt") as pf:
+                        description = pf.readline()
+                except:
+                    print("Error while reading status file.")
 
             # set failed status if a hook failed
             set_commit_status({
