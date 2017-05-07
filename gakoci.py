@@ -331,8 +331,8 @@ class NgrokTunnel:
 
         :param port: int, localhost port forwarded through tunnel
         """
-        assert find_executable(
-            "ngrok"), "ngrok command must be installed, see https://ngrok.com/"
+        #assert find_executable(
+            #"ngrok"), "ngrok command must be installed, see https://ngrok.com/"
         self.port = port
         self.auth_token = auth_token
 
@@ -342,7 +342,7 @@ class NgrokTunnel:
         :return: the tunnel URL which is now publicly open for your localhost port
         """
 
-        command = ["ngrok", "http", "--authtoken={}".format(
+        command = ["./ngrok", "http", "--authtoken={}".format(
             self.auth_token), "--log=stdout", str(self.port)]
         self.ngrok = subprocess.Popen(command, stdout=subprocess.DEVNULL)
 

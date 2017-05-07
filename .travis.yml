@@ -1,0 +1,28 @@
+# travis build file for gakoci
+
+language: python
+
+env:
+  global: 
+    # NGROK_AUTH_TOKEN
+    - secure: "ov5rvBmGcYbdWCr0RR7DzsyWh0BpfBIvS+ln/LZKW4nK2z6qtAP6iteM9atpSdTYn/vpNkMR1W4KYw7G1FLbscBBkSnTJqQHcxOiqcHUPg3xx6jfYbmKxdFqB2st7Pg5ftFoAZk1Dql6lsp+HdkKnERwZoeCX2Akg24D2bmCPAZAYUZ5o5IDUPiURc5pFWze8eywAb8nzYAsvfCPtbg3hfemk/WKyUMZzNOkgEehSW5GgIYvW912oQCPZLzGmEJop7RzAEWFGeekz8IBJKsXk+8r2mZZTPxSVeattJBbwpT2rfjjra+2SK1IC8MAibQFCHh1hUREQST0j78B2yAHc3j7JLBKzJKyvSOLOVlBp1DhGaCfb/6EFBLGnxfT3BxAqwewy+tWSUE32t13v6DjtJnBcM4dVbGEYspU/Ztla6ZXJzoFDZYvPngvVy5Cap9FRyr/M9FZPcFUxr9B0oQOdKw0BEEurPIX6DBs9CQ8bwxkkpE6LVZnz8HntfQEwdPw1dhMmBrSGsFALKlW4ylkw/c/U70WiwsW9VTdEPHFlBL6/SJd398830vQvATlrExrNtElyeOUkq34bVfWeszmYFdPNAyqhXcr44lORDWPHteTkegDY0XXiGWehXjfYlVbUCVdPOKh4ewyZTGY8tJDxl/e24x7wCYGTqnL3jr3y74="
+    # GITHUB_AUTH_USER
+    - secure: "gjADmQdbZ14jL7krkCpFSb/DdemHxHnTMnPlqZGPkb/vLGUmHAX3kMEY/h3EjABKL7DZ/bYouMSaAVL5aQwb06IkHW9Pql5qjXjGnKdNdCTDADQrZESMioHBosq5kbY5zScuGMOD1H5r0cyruyPxzz+eVtrJf5zhkfvBamnl2mCFZ+jJkaOGsI4CeBWQlkoFdH6HkeKpS12y4agVW+TjY3ANggA5fezT82oFMCwCDqCLsU9SJhMqLUT6kBeJhDnSZ9Uugu+usKiLlFiKMCCIuvkkCjsrfgUctzGfgMWaxKgj0K1ROj0EDA+vfVcVUuX2jIeBXq6tK2h8Jl6COMeme7W+YjQTudDiwkT41aS4cBLrwGPtagPgHS83BsPCAWy/1c1spLPK5fXkU6hlpimuBUN1u6stobHbQE8KWZEWEKGJr3I+3PDxmyOI31Dxl0B/F/hC/BTwyMBtd8Mi93XTxF+u2Z2qqHrTvBIUmRf51nZfG2J7bUjnUwACk7anGCxqWjiwqfYJwiWrWIetUbsdVZZXKVnyACzn/zzdJcs52hK33vNlhXMdxscfS/i7U2EZIIHj56Uz0tE8zB5bkQTBNXrK1yUW9TlmUKGFKvS5ezOcF0bzkvwBr1/dqoyilC28AObF3cQTTLskzmafO8DJZpcO6N0H8tKKuJL8W3/O50k="
+    # GITHUB_AUTH_TOKEN
+    - secure: "n22ni2jpTQkx1HVy5W/gLvVGaBoaFV3Gb+iclPYy9MpW5qybSUTegOQX/SaShw0fBV7zr5RMdTIGQm911kzYRqaFgqqwOcqvKlaDsA6/KbKnPiJNlEHCfrpkhVVNHDN02hzYQimki6gtklUyc4KqQsiR0sy0Rw9wTvjeDWwnP6utPfNohpmhuKtPadTkYOqDSMYXgNNQ39LQ+Q51jKXIXN2ZrYik4MpgT5kVmrl+eXoFxsrNv9jvhl67FpPrQAxzLDoguIWNompuWBXvX2dbsaBzvVc1k7zIAJ4ufJzq0LjGIJisp57PWXFyZyC3NFDhh2kEUTXlDrrg8ChLVJ0mGBlgHockecG9Rcr9QEz9tnuv4xWg8puHlz+3Z13gcYRacUPVCQN0T5Mq94D/Me7F5KI8AeOeyG9hjL2nhyOPmWDyGI5f82jVOt5KjMR60vhMwZzjv1WoT4YdtYVN5qR/vLW8RaY67e6UiltQutnD16TxCQYe4oQW5CCqVx1f/9CzTy5/eDmrjSeFzcvt2hFHDekdluBkkjuqu7Wb5qFJuy35ocX0PvSxp4wAZccrr/3UNkifNMb8xF7AB9SBrXBtixK86fdKGhCVaqgtq1gry+Qqj1xbjPv+7XJvjaqxYwLoSfVlmDpWKaBHx27yLRDH4R5OWjnyawOUYKb1PzUPKl8="
+
+python:
+  - "3.6"
+
+install:
+  - pip install -r requirements.txt
+  - curl -LO --tlsv1 https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip
+  - unzip ngrok-stable-linux-amd64.zip
+  - git config --global user.email "travis@example.com"
+  - git config --global user.name "Travis CI"
+  - echo "machine github.com login $GITHUB_AUTH_USER password $GITHUB_AUTH_TOKEN" > ~/.netrc
+  - chmod 600 ~/.netrc
+
+
+script:
+  - python -m unittest test

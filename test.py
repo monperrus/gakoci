@@ -86,9 +86,12 @@ class CoreTestCase(unittest.TestCase):
     def setUp(self):
         if os.path.exists('gakoci_config.py'):
             import gakoci_config
-            if 'GITHUB_AUTH_USER' in dir(builtins): os.environ['GITHUB_AUTH_USER'] = builtins.GITHUB_AUTH_USER
-            if 'GITHUB_AUTH_TOKEN' in dir(builtins): os.environ['GITHUB_AUTH_TOKEN'] = builtins.GITHUB_AUTH_TOKEN
-            if 'NGROK_AUTH_TOKEN' in dir(builtins): os.environ['NGROK_AUTH_TOKEN'] = builtins.NGROK_AUTH_TOKEN
+
+        if 'GITHUB_AUTH_USER' in dir(builtins): os.environ['GITHUB_AUTH_USER'] = builtins.GITHUB_AUTH_USER
+        if 'GITHUB_AUTH_TOKEN' in dir(builtins): os.environ['GITHUB_AUTH_TOKEN'] = builtins.GITHUB_AUTH_TOKEN
+        if 'NGROK_AUTH_TOKEN' in dir(builtins): os.environ['NGROK_AUTH_TOKEN'] = builtins.NGROK_AUTH_TOKEN
+        CoreTestCase.PROTOCOL_TEST_REPO = builtins.PROTOCOL_TEST_REPO if 'PROTOCOL_TEST_REPO' in dir(builtins) else "https"
+            
         CoreTestCase.owner = os.environ['GITHUB_AUTH_USER']
         CoreTestCase.repo_path = CoreTestCase.owner + "/" + CoreTestCase.repo_name
 
@@ -113,7 +116,7 @@ class CoreTestCase(unittest.TestCase):
             shutil.rmtree("test-repo")
         if os.path.exists("testhooks"):
             shutil.rmtree("testhooks")
-        os.system("git clone git@github.com:" +
+        os.system("git clone " + CoreTestCase.PROTOCOL_TEST_REPO + "://github.com/" +
                   CoreTestCase.repo_path + ".git")
         os.system('mkdir -p testhooks')
         # the hooks that will be used
