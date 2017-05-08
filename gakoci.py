@@ -32,42 +32,25 @@ class EventAction:
     def __init__(self):
         self.meta_info = {}
 
-    def get_scripts(self):
-        """ returns all scripts to be executed for this event. to be overridden """
+    def arguments(self):
         return []
-
-    def add_script(self, script):
-        """ adds a script if it exists and is executable """
-        globpath = os.path.join(self.hooks_dir, script + '*')
-        for s in glob.glob(globpath):
-            if os.path.isfile(s) and os.access(s, os.X_OK) and s not in self.scripts:
-                self.scripts.append(s)
-
 
 class PushAction(EventAction):
     """ calls push-<owner>-<repo>-* with 6 arguments """
 
     def __init__(self, application, payload_path):
         self.scripts = []
-        self.hooks_dir = application.hooks_dir
         self.meta_info = get_core_info_push_file(payload_path)
         self.payload_path = payload_path
 
-    def get_scripts(self):
-        # here it means that we somehow "secure" the CI daemon, because only
-        # certain repo will be handled
-        self.add_script(
-            "push-" + self.meta_info['owner'] + '-' + self.meta_info['repo'])
-        print(self.scripts)
-        return self.scripts
 
     def arguments(self):
-        return [self.payload_path,  # $1 in shell
-                self.meta_info['event_type'],  # $2 in shell
-                self.meta_info['owner'],  # $3 in shell
-                self.meta_info['repo'],  # $4 in shell
-                self.meta_info['branch'],  # $5 in shell
-                self.meta_info['commit']  # $6 in shell
+        return [self.payload_path,  # $1 in script
+                self.meta_info['event_type'],  # $2 in script
+                self.meta_info['owner'],  # $3 in script
+                self.meta_info['repo'],  # $4 in script
+                self.meta_info['branch'],  # $5 in script
+                self.meta_info['commit']  # $6 in script
                 ]
 
 
@@ -76,19 +59,20 @@ class PullRequestAction(EventAction):
 
     def __init__(self, application, payload_path):
         self.scripts = []
-        self.hooks_dir = application.hooks_dir
         self.meta_info = get_core_info_pull_request_file(payload_path)
         self.payload_path = payload_path
 
-    def get_scripts(self):
-        # here it means that we somehow "secure" the CI daemon, because only
-        # certain repo will be handled
-        self.add_script(
-            "pull_request-" + self.meta_info['base_owner'] + '-' + self.meta_info['base_repo'])
-        return self.scripts
-
     def arguments(self):
-        return [self.payload_path, self.meta_info['event_type'], self.meta_info['owner'], self.meta_info['repo'], self.meta_info['branch'], self.meta_info['commit'], self.meta_info['base_owner'], self.meta_info['base_repo'], self.meta_info['pr_number']]
+        return [self.payload_path, # $1 in script
+                self.meta_info['event_type'], # $2 in script
+                self.meta_info['owner'], # $3 in script
+                self.meta_info['repo'], # $4 in script
+                self.meta_info['branch'], # $5 in script
+                self.meta_info['commit'], # $6 in script
+                self.meta_info['base_owner'], # $7 in script
+                self.meta_info['base_repo'], # $8 in script
+                self.meta_info['pr_number'] # $9 in script
+                ]
 
 
 def get_core_info_push_file(json_path):
@@ -147,6 +131,67 @@ def set_commit_status(args):
     resp = requests.post(url=args['statuses_url'], data=data, headers=headers)
     assert resp.status_code == 201, (resp.status_code, resp.text)
 
+class GakoCITask:
+    """ A CI task to be executed 
+    event_action : EventAction
+    """
+    def execute(self, event_action):
+        """ abstract, must set self.status, and self.return_code """
+        self.status = "fake task"
+        self.return_code = -1000
+        pass
+    
+    def name(self):
+        return "noname"
+
+class ScriptCITask(GakoCITask):
+    """ executes a script from the local disk"""
+    def __init__(self, script_path):
+        assert os.path.isfile(script_path)
+        self.script_path = script_path
+    
+    def name(self):
+        return os.path.basename(self.script_path)
+
+    def execute(self, event_action, server):
+        """ abstract, must set self.status, and self.return_code """
+        # has to be asynchronous, because Github expects a fast response
+        
+        # call to super
+        GakoCITask.execute(self, event_action)
+        
+        # the script may have been removed
+        if not os.path.isfile(self.script_path): return
+    
+        # we checkout the project if the script ends with -checkout
+        if self.script_path.endswith('-checkout'):
+            os.system('cd '+event_action.cwd+'; git init')
+            os.system('cd '+event_action.cwd+'; git remote -v add origin git://github.com/'+event_action.meta_info['base_owner']+'/'+event_action.meta_info['base_repo']+'.git')
+            
+            # remote branch +refs/pull/WW/merge is not available right now
+            time.sleep(2)
+            os.system('cd '+event_action.cwd+'; git fetch origin +refs/pull/'+event_action.meta_info['pr_number']+'/merge:gakoci')
+            os.system('cd '+event_action.cwd+'; git checkout gakoci')
+        
+        #preconditions
+        if not (isinstance(event_action, PushAction) or isinstance(event_action, PullRequestAction)): return
+
+        command = [self.script_path] + event_action.arguments()
+        print(" ".join(command))
+        proc = Popen(
+            executable=os.path.abspath(self.script_path),
+            args=command,
+            shell=False,
+            cwd=event_action.cwd,
+            stdout=DEVNULL, stderr=DEVNULL
+        )
+        timer = threading.Timer(server.get_script_timeout_in_seconds(), proc.kill)
+        proc.wait()
+        timer.cancel()
+        self.status = "exec in " + event_action.cwd
+        self.returncode = proc.returncode
+        pass
+
 
 class GakoCI:
     """ 
@@ -164,9 +209,10 @@ class GakoCI:
         self.set_public_url()
         self.register_webhooks()
         self.ran = {}
+        self.tasks = []
 
         # used so that only one task is performed at a time
-        # otherwise with for CI java, the server goes into out-of-memory
+        # otherwise with multiple builds, all are done in parallel and the server goes into out-of-memory
         self.lock = threading.Lock()
         pass  # end __init__
 
@@ -196,35 +242,49 @@ class GakoCI:
     def perform_tasks(self, event_type, payload_path):
         event_action = self.get_core_info_depending_on_event_type(
             event_type, payload_path)
-        for s in event_action.get_scripts():
-            # has to be asynchronous, because Github expects a fast response
-            threading.Thread(target=GakoCI.execute, args=(
-                self, s, event_action)).start()
+        
+        ## loading the file-based tasks
+        tasks = list(self.tasks) # the already registered ones
+        for repo in self.repos:
+            globpath = os.path.join(self.hooks_dir, event_type +"-" + repo.replace('/', '-') + '*')
+            for s in glob.glob(globpath):
+                if os.path.isfile(s) and os.access(s, os.X_OK):
+                    #print("registering task " + s)
+                    tasks.append(ScriptCITask(s))
+
+        for task in tasks:
+            # get_core_info_depending_on_event_type has given all the information
+            # including payload
+            # callhas to be asynchronous, because Github expects a fast response
+            threading.Thread(target=GakoCI.execute_task, args=( 
+                self, task, event_action)).start()
+            #self.execute_task(task, event_action)
 
     def get_script_timeout_in_seconds(self):
-        """ can be overridden by subclasses """
+        """ can be overridden by subclasses TODO: move ??"""
         return 60*10 # 10 minutes
 
-    def execute(self, s, event_action):
+    def execute_task(self, task, event_action):
+        """ execute the task in a specific directory """
+        
+        # precondition
+        if 'statuses_url' not in event_action.meta_info: return
+
         try:
             self.lock.acquire(True)
             cwd = mkdtemp()
-            self.ran[os.path.basename(cwd)] = cwd
-            command = [s] + event_action.arguments()
-            print(" ".join(command))
-            proc = Popen(
-                executable=os.path.abspath(s),
-                args=command,
-                shell=False,
-                cwd=cwd,
-                stdout=DEVNULL, stderr=DEVNULL
-            )
-            timer = threading.Timer(self.get_script_timeout_in_seconds(), proc.kill)
-            timer.start()
-            proc.wait()
-            timer.cancel()
-
+            self.ran[os.path.basename(cwd)] = cwd            
             description = cwd
+            
+            # where we work
+            event_action.cwd = cwd
+            
+            # execute the task
+            task.execute(event_action, self)
+
+            if task.status:
+                description = task.status
+            
             # try to get status from status.txt file
             if os.path.isfile(cwd + "/status.txt"):
                 try:
@@ -237,8 +297,8 @@ class GakoCI:
             set_commit_status({
                 'statuses_url': event_action.meta_info['statuses_url'],
                 'token': self.github_token,
-                'state': 'success' if proc.returncode == 0 else 'failure',
-                'context': os.path.basename(s),
+                'state': 'success' if task.returncode == 0 else 'failure',
+                'context': task.name(),
                 'target_url': self.public_url + '/traces/' + os.path.basename(cwd),
                 'description': description
             }
@@ -280,7 +340,7 @@ class GakoCI:
             else:
                 application.log[event_type] = [event_id]
 
-            osfd, payloadfile = mkstemp()
+            osfd, payloadfile = mkstemp(suffix='.json')
             with os.fdopen(osfd, 'w') as pf:
                 pf.write(json.dumps(payload))
             self.perform_tasks(event_type, payloadfile)
@@ -322,7 +382,7 @@ class GakoCINgrok(GakoCI):
 
 
 class NgrokTunnel:
-    """ utility class for GakoCINgrok. Credits: https://opensourcehacker.com/2015/03/27/testing-web-hook-http-api-callbacks-with-ngrok-in-python/ """
+    """ utility class for GakoCINgrok. Credits: https://opensourcehacker.com/2015159/03/27/testing-web-hook-http-api-callbacks-with-ngrok-in-python/ """
 
     def __init__(self, port, auth_token):
         """Initalize Ngrok tunnel.

@@ -37,7 +37,6 @@ Typical push job for Python:
 
     #!/bin/bash
     git init
-    echo git://github.com/$4/$5.git
     git remote -v add -t $5 origin git://github.com/$3/$4.git
     git fetch origin $5
     git reset --hard FETCH_HEAD
@@ -48,7 +47,6 @@ Typical push job for Java/Maven:
 
     #!/bin/bash
     git init
-    echo git://github.com/$4/$5.git
     git remote -v add -t $5 origin git://github.com/$3/$4.git
     git fetch origin $5
     git reset --hard FETCH_HEAD

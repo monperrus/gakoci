@@ -19,6 +19,7 @@ import gakoci
 import json
 import uuid
 import builtins
+import subprocess
 
 def create_pull_request(args):
     """ 
@@ -141,6 +142,9 @@ class CoreTestCase(unittest.TestCase):
         self.assertEqual(1, sum(1 for x in r.get_hooks()))
         n_commits = sum(1 for x in r.get_commits())
         n_events = sum(1 for x in r.get_events())
+        
+        ## testing push-based CI
+        os.system('cd test-repo/; git checkout master')
         os.system(
             'cd test-repo/; echo `date` > README.md; git commit -m up -a ; git push origin master')
 
@@ -166,23 +170,28 @@ class CoreTestCase(unittest.TestCase):
         self.assertEqual(
             3, sum(1 for x in r.get_commit(commit_id).get_statuses()))
 
-        # todo assert on status detail url
-
         # now testing pull requests
         os.system('rm testhooks/*')
-        os.system('printf "#!/bin/sh\necho pr" > testhooks/pull_request-' +
-                  CoreTestCase.owner + '-' + CoreTestCase.repo_name)
+        # creating one pull request file
+        os.system('printf "#!/bin/sh\necho pr\nls --format=horizontal > status.txt\n" > testhooks/pull_request-' +
+                  CoreTestCase.owner + '-' + CoreTestCase.repo_name+"-checkout")
         os.system('chmod 755 testhooks/*')
 
         pr_branch = str(uuid.uuid4())
-        os.system('cd test-repo/; git checkout -b ' + pr_branch +
-                  '; echo `date` > README.md; git commit -m up -a ; git push -f origin ' + pr_branch)
+        os.system('cd test-repo/; git checkout -b ' + pr_branch)
+        os.system('cd test-repo/; echo `date` > README.md; git commit -m up -a ; git push -f origin ' + pr_branch)
+        commit_id = subprocess.check_output(['sh', '-c', "cd test-repo/; git rev-parse HEAD"]).decode("utf-8").strip()
+        print("pr commit: "+commit_id)
         create_pull_request({"token": os.environ[
                             "GITHUB_AUTH_TOKEN"], "user": CoreTestCase.owner, "repo": CoreTestCase.repo_name, "head": pr_branch})
 
         # wait for Github callback a little bit
         time.sleep(3)
-
+        statuses = [x for x in r.get_commit(commit_id).get_statuses()]
+        self.assertEqual(
+            1, len(statuses))
+        # testing the status.txt feature and the checkout feature
+        self.assertEqual("README.md  status.txt\n", statuses[0].description)
         self.assertEqual(1, len(self.application.log['pull_request']))
 
     def tearDown(self):
