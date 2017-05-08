@@ -1,80 +1,85 @@
-# A simple continuous integration daemon for Github
+# GakoCI: continuous integration daemon for Github
 
 ##  What is GakoCI?
-GakoCI is a simple continuous integration daemon for Github.
-For a set of repositories:
+GakoCI is a continuous integration (CI) daemon that is specialized for Github and pull-request based development.
 
-1. it registers a webhook on Github 
-2. upon push and pull request, it executes a set of hook scripts 
-3. it adds a commit / pull requests status for each script
+What it does:
 
-It can work on localhost and machines in private networks thanks to Ngrok.
+1. it registers a webhook on Github for a set of repositories
+2. upon pull requests, it executes a set of hook scripts 
+3. for each hook script, it adds a pull request status and a link to a trace file if one exists
+
+It is written in Python and is under a MIT license.
 
 ## How to use it?
 
-First, create an API token for Github (see <https://help.github.com/articles/creating-an-access-token-for-command-line-use/>) and export it as environment variable.
 
     git clone http://github.com/monperrus/gakoci.git
     cd gakoci
     pip3 install -r requirements.txt
+    export GITHUB_AUTH_USER=yourname
     export GITHUB_AUTH_TOKEN=1234
+    # monperrus/test-repo is the repo for which CI is setup
     python3 -c 'import gakoci; gakoci.GakoCI(repos=["monperrus/test-repo"]).run()'
 
-If you work on a private server, with no public interface, you would rather use [Ngrok](https://ngrok.com/).
-
-    export NGROK_AUTH_TOKEN=1234
-    python3 -c 'import gakoci; gakoci.GakoCINgrok(repos=["monperrus/test-repo"]).run()'
+`GITHUB_AUTH_TOKEN` is an API token for Github (see <https://help.github.com/articles/creating-an-access-token-for-command-line-use/>) that is exported as environment variable.
 
 
 ## How to set up jobs?
 
-Let's assume you've started GakoCI for `foobar/test-repo`.
-Then, the push jobs is in a file called `hooks/push-foobar-test-repo`, and the pull request job is in a file called `hooks/pull_request-foobar-test-repo`. If the job creates a file called `trace.txt`, it is viewable from the internet as job log, as in Travis (note the `| tee trace.txt` below).
+### Simplest example
 
-You can have several push jobs for the same repo, by simply adding a suffix: `hooks/pull_request-foobar-test-repo-1`, `hooks/pull_request-foobar-test-repo-2`, ...
-
-Typical push job for Python:
+Let's assume you've started GakoCI for `foobar/testrepo`.
+Then, the pull request job is in a file called `hooks/pull_request-foobar-testrepo-checkout`. Gakoci clones the repository automatically if the job file ends with `-checkout`.
 
     #!/bin/bash
-    git init
-    git remote -v add -t $5 origin git://github.com/$3/$4.git
-    git fetch origin $5
-    git reset --hard FETCH_HEAD
-    python3 -m unittest 2>&1 | tee trace.txt
-    exit ${PIPESTATUS[0]}
+    mvn clean test
 
-Typical push job for Java/Maven:
+If the job script does not return with 0, the pull request status is marked as `failure`.
+
+### Github status
+
+If the job produces a file called `status.txt`, it is used as commit status on Github
 
     #!/bin/bash
-    git init
-    git remote -v add -t $5 origin git://github.com/$3/$4.git
-    git fetch origin $5
-    git reset --hard FETCH_HEAD
+    mvn clean test
+    echo "all good" > status.txt
+
+### Job with traces
+
+If the job produces a file called `trace.txt`, the pull request status contains a link to browse the trace.
+
+Example job:
+
+    #!/bin/bash
     mvn clean test 2>&1 | tee trace.txt
     exit ${PIPESTATUS[0]}
-    
 
-Push hook files take 6 arguments:
+This can be combined with `status.txt`.
+
+### Multiple jobs
+
+You can have several push jobs for the same repo, by simply adding a suffix: `hooks/pull_request-foobar-testrepo-1-checkout`, `hooks/pull_request-foobar-testrepo-2--checkout`, 
+
+### Cloning on your own
+
+If the job file name does not end with `-checkout` you have to clone the repo on your own:
+
+    #!/bin/bash
+    git init
+    git remote -v add origin git://github.com/$3/$4.git
+    git fetch origin $5:gakoci
+    git checkout gakoci
+    ... (the rest of CI)
+
+### Push jobs
+
+GakoCI can also work with push events. CI scripts must staart with `push` (eg ``hooks/push-foobar-testrepo`) and push job files take 6 arguments:
 
     <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1>
+    
     push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
-Be careful, the arguments are used in bash script file, then counting args start at 1 for payload.json.
-
-Typical pull request job for Java/Maven use the PR branch retrieved on Github (see GitHub instruction [here](https://help.github.com/articles/checking-out-pull-requests-locally/)):
-
-    #!/bin/bash
-    git init
-    echo git://github.com/$4/$5.git
-    git remote -v add -t $5 origin git://github.com/$3/$4.git
-    git fetch origin pull/$9/head:gakoci
-    git checkout gakoci
-    mvn clean test 2>&1 | tee trace.txt
-    exit ${PIPESTATUS[0]}
-
-Pull-request hook files take 9 arguments:
-
-    <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1> <base_owner> <base_repo> <pr_number>
 
 
 ## Motivation
