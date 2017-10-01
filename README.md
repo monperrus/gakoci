@@ -39,11 +39,7 @@ If the job script does not return with 0, the pull request status is marked as `
 
 ### Github status
 
-If the job produces a file called `status.txt`, it is used as commit status on Github
-
-    #!/bin/bash
-    mvn clean test
-    echo "all good" > status.txt
+The commit status on Github is the last line of the standard output.
 
 ### Job with traces
 
@@ -55,31 +51,44 @@ Example job:
     mvn clean test 2>&1 | tee trace.txt
     exit ${PIPESTATUS[0]}
 
-This can be combined with `status.txt`.
-
 ### Multiple jobs
 
 You can have several push jobs for the same repo, by simply adding a suffix: `hooks/pull_request-foobar-testrepo-1-checkout`, `hooks/pull_request-foobar-testrepo-2--checkout`, 
 
-### Cloning on your own
+### Cloning the repo
 
-If the job file name does not end with `-checkout` you have to clone the repo on your own:
+If the job file is a shell script whose file name ends with `.sh`:
 
-    #!/bin/bash
-    git init
-    git remote -v add origin git://github.com/$3/$4.git
-    git fetch origin $5:gakoci
-    git checkout gakoci
-    ... (the rest of CI)
+* the git repository is automatically checkout
+* the following variable are available
+
+    branch="master"
+    statuses_url="https://api.github.com/repos/monperrus/test/statuses/385f1274627568a6d225061452abb3f3663ff57d"
+    event_type="push"
+    payload_path="/tmp/tmpr0z6v9lf.json"
+    commit="385f1274627568a6d225061452abb3f3663ff57d"
+    repo="test"
+    owner="monperrus"
 
 ### Push jobs
 
-GakoCI can also work with push events. CI scripts must staart with `push` (eg ``hooks/push-foobar-testrepo`) and push job files take 6 arguments:
+GakoCI works with push events as follows. CI scripts must start with `push` (eg ``hooks/push-foobar-testrepo`) and job files take 6 arguments:
 
     <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1>
-    
+        $1             $2            $3          $4         $5         $5
+    # useful for having scripts compatible  with Travis
+    export TRAVIS_REPO_SLUG=$3/$4
     push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
+### Pull-request jobs
+
+GakoCI can also work with pull requests events. CI scripts must start with `push` (eg ``hooks/pull_request-foobar-testrepo`) and job files take 6 arguments:
+
+    <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1> <base_owner> <base_repo> <pr_number>
+        $1             $2            $3          $4         $5         $5           $6           $7          $8
+    # useful for having scripts compatible with Travis
+    export TRAVIS_REPO_SLUG=$3/$4
+    push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
 
 ## Motivation

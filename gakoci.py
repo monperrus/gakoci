@@ -12,7 +12,10 @@ import json
 import socket
 import os
 from tempfile import mkstemp, mkdtemp
+
+# cannot use "run", because not on spoon3r (version<3.5)
 from subprocess import Popen, PIPE, DEVNULL
+
 import subprocess
 import time
 import uuid
@@ -41,11 +44,11 @@ class PushAction(EventAction):
     def __init__(self, application, payload_path):
         self.scripts = []
         self.meta_info = get_core_info_push_file(payload_path)
-        self.payload_path = payload_path
+        self.meta_info['payload_path'] = payload_path
 
 
     def arguments(self):
-        return [self.payload_path,  # $1 in script
+        return [self.meta_info['payload_path'],  # $1 in script
                 self.meta_info['event_type'],  # $2 in script
                 self.meta_info['owner'],  # $3 in script
                 self.meta_info['repo'],  # $4 in script
@@ -60,10 +63,10 @@ class PullRequestAction(EventAction):
     def __init__(self, application, payload_path):
         self.scripts = []
         self.meta_info = get_core_info_pull_request_file(payload_path)
-        self.payload_path = payload_path
+        self.meta_info['payload_path'] = payload_path
 
     def arguments(self):
-        return [self.payload_path, # $1 in script
+        return [self.meta_info['payload_path'], # $1 in script
                 self.meta_info['event_type'], # $2 in script
                 self.meta_info['owner'], # $3 in script
                 self.meta_info['repo'], # $4 in script
@@ -139,7 +142,7 @@ class GakoCITask:
         """ abstract, must set self.status, and self.return_code """
         self.status = "fake task"
         self.return_code = -1000
-        pass
+        return "fake task"
     
     def name(self):
         return "noname"
@@ -163,35 +166,90 @@ class ScriptCITask(GakoCITask):
         # the script may have been removed
         if not os.path.isfile(self.script_path): return
     
-        # we checkout the project if the script ends with -checkout
-        if self.script_path.endswith('-checkout'):
-            os.system('cd '+event_action.cwd+'; git init')
-            os.system('cd '+event_action.cwd+'; git remote -v add origin git://github.com/'+event_action.meta_info['base_owner']+'/'+event_action.meta_info['base_repo']+'.git')
-            
-            # remote branch +refs/pull/WW/merge is not available right now
-            time.sleep(2)
-            os.system('cd '+event_action.cwd+'; git fetch origin +refs/pull/'+event_action.meta_info['pr_number']+'/merge:gakoci')
-            os.system('cd '+event_action.cwd+'; git checkout gakoci')
+        ## we checkout the project if the script ends with -checkout
+        #if self.script_path.endswith('-checkout'):
         
         #preconditions
         if not (isinstance(event_action, PushAction) or isinstance(event_action, PullRequestAction)): return
 
-        command = [self.script_path] + event_action.arguments()
-        print(" ".join(command))
-        proc = Popen(
-            executable=os.path.abspath(self.script_path),
-            args=command,
-            shell=False,
-            cwd=event_action.cwd,
-            stdout=DEVNULL, stderr=DEVNULL
-        )
-        timer = threading.Timer(server.get_script_timeout_in_seconds(), proc.kill)
-        proc.wait()
-        timer.cancel()
+        # default value
         self.status = "exec in " + event_action.cwd
-        self.returncode = proc.returncode
-        pass
+        self.returncode = 0
+        
+        if not self.script_path.endswith(".sh"):
+            command = [self.script_path] + event_action.arguments()
+            print(" ".join(command))
+            proc = Popen(
+                executable=os.path.abspath(self.script_path),
+                args=command,
+                shell=False,
+                cwd=event_action.cwd,
+                stdin=PIPE,
+                stdout=PIPE, stderr=DEVNULL,
+                universal_newlines=True
+            )
+            # by convention the status is the last line
+            timer = threading.Timer(server.get_script_timeout_in_seconds(), proc.kill)
+            out = proc.communicate()[0].split("\n")
+            timer.cancel()
+            self.status = out[-1] if len(out[-1])>0 else (out[-2] if len(out)>=2 else "no output")
+            self.returncode = proc.returncode
+        else:
+            # it is a shell script, we can do much more
+            proc = Popen(
+                executable="/bin/bash",
+                args=[],
+                shell=False,
+                cwd=event_action.cwd,
+                stdin=PIPE,
+                stdout=PIPE, stderr=DEVNULL,
+                universal_newlines=True
+            )
+            stdin = ""
+            for i,val in event_action.meta_info.items():
+                    stdin += i+"=\""+val+"\"\n"
+            # reproducing travis data
+            stdin += "TRAVIS_REPO_SLUG=\""+event_action.meta_info['owner']+"/"+event_action.meta_info['repo']+"\"\n"
+            
+            # adding the shell variables
+            stdin = stdin + "\n" + self.checkout_repo(event_action) + "\n"
 
+            # adding the content of the CI script
+            with  open(self.script_path) as f: stdin = stdin + "\n" + f.read() + "\n"
+            
+            # cleaning to save space
+            stdin = stdin + "\nrm -rf .git\n"
+
+            #print(stdin)
+            timer = threading.Timer(server.get_script_timeout_in_seconds(), proc.kill)
+            out = proc.communicate(stdin)[0].split("\n")
+            timer.cancel()
+            # by convention the status is the last line
+            self.status = out[-1] if len(out[-1])>0 else (out[-2] if len(out)>=2 else "no output")
+            #print(self.status)            
+            self.returncode = proc.returncode
+            
+        return
+
+    def checkout_repo(self, event_action):
+        if isinstance(event_action, PushAction):
+            result = ""
+            result += 'git init;'
+            result += 'git remote -v add gakoci git://github.com/'+event_action.meta_info['owner']+'/'+event_action.meta_info['repo']+'.git;'           
+            result += "sleep 2;"
+            result += 'git fetch gakoci '+event_action.meta_info['branch']+':gakoci;'
+            result += 'git checkout gakoci;'
+            return result
+        
+        if isinstance(event_action, PullRequestAction): 
+            result = ""
+            result += 'git init;'
+            result += 'git remote -v add gakoci git://github.com/'+event_action.meta_info['base_owner']+'/'+event_action.meta_info['base_repo']+'.git;'           
+            ## remote branch +refs/pull/WW/merge is not available right now
+            result += "sleep 2;"
+            result += 'git fetch gakoci +refs/pull/'+event_action.meta_info['pr_number']+'/merge:gakoci;'
+            result += 'git checkout gakoci;'
+            return result
 
 class GakoCI:
     """ 
@@ -200,7 +258,7 @@ class GakoCI:
     """
 
     def __init__(self, repos, github_token="", host="127.0.0.1", port=5000, hooks_dir='./hooks'):
-        self.github_token = github_token if github_token != "" else os.environ["GITHUB_AUTH_TOKEN"]
+        self.github_token = github_token
         self.repos = repos
         self.host = host
         self.port = port
@@ -216,13 +274,30 @@ class GakoCI:
         self.lock = threading.Lock()
         pass  # end __init__
 
+    def shutdown(self):
+        if self.github_token == "": return
+        gh = github.Github(
+            login_or_token=self.github_token)
+        for repo in self.repos:
+            repo = gh.get_repo(repo)
+            for x in repo.get_hooks():
+                if x.config['url'] == self.public_url: x.delete()
+
+    def get_url(self):
+        return "http://"+self.host+":"+str(self.port)
+
     def register_webhooks(self):
+        if self.github_token == "": return
         github_o = github.Github(login_or_token=self.github_token)
         for repo in self.repos:
+          try:
             r = github_o.get_repo(repo)
             if self.public_url not in [x.config['url'] for x in r.get_hooks() if "url" in x.config]:
                 r.create_hook(name="web", config={
                               "url": self.public_url, "content_type": "json"}, events=["push", "pull_request"])
+          except github.GithubException: 
+              print('!!!!!!!!  cannot access and register webhooks for '+repo)
+              pass
 
     def set_public_url(self):
         if self.host == "0.0.0.0":
@@ -237,20 +312,26 @@ class GakoCI:
         if event_type == "pull_request":
             result = PullRequestAction(self, payload_path)
         result.meta_info['event_type'] = event_type
+        if not 'owner' in result.meta_info: result.meta_info['owner'] = "not_detected"
+        if not 'repo' in result.meta_info: result.meta_info['repo'] = "not_detected"
         return result
 
     def perform_tasks(self, event_type, payload_path):
         event_action = self.get_core_info_depending_on_event_type(
             event_type, payload_path)
         
+        self.perform_tasks_log = []
         ## loading the file-based tasks
         tasks = list(self.tasks) # the already registered ones
-        for repo in self.repos:
-            globpath = os.path.join(self.hooks_dir, event_type +"-" + repo.replace('/', '-') + '*')
-            for s in glob.glob(globpath):
-                if os.path.isfile(s) and os.access(s, os.X_OK):
-                    #print("registering task " + s)
-                    tasks.append(ScriptCITask(s))
+        repo = event_action.meta_info['owner'] + "/" + event_action.meta_info['repo'] 
+        
+        if repo not in self.repos: return
+
+        globpath = os.path.join(self.hooks_dir, event_type +"-" + repo.replace('/','-') + '*')
+        for s in glob.glob(globpath):
+            if os.path.isfile(s) and os.access(s, os.X_OK):
+                self.perform_tasks_log.append(s)
+                tasks.append(ScriptCITask(s))
 
         for task in tasks:
             # get_core_info_depending_on_event_type has given all the information
@@ -285,16 +366,8 @@ class GakoCI:
             if task.status:
                 description = task.status
             
-            # try to get status from status.txt file
-            if os.path.isfile(cwd + "/status.txt"):
-                try:
-                    with open(cwd + "/status.txt") as pf:
-                        description = pf.readline()
-                except:
-                    print("Error while reading status file.")
-
             # set failed status if a hook failed
-            set_commit_status({
+            if self.github_token != "":  set_commit_status({
                 'statuses_url': event_action.meta_info['statuses_url'],
                 'token': self.github_token,
                 'state': 'success' if task.returncode == 0 else 'failure',
@@ -308,18 +381,26 @@ class GakoCI:
 
     def create_flask_application(self):
         application = Flask(__name__)
-        application.log = {}
+        self.log = {}
         application.killurl = str(uuid.uuid4())
 
         @application.route('/' + application.killurl, methods=['POST'])
         def seriouslykill():
             func = request.environ.get('werkzeug.server.shutdown')
             func()
+            self.shutdown()
             return "Shutting down..."
 
         @application.route('/traces/<trace_id>', methods=['GET'])
         def trace(trace_id):
-            return open(self.ran[trace_id] + "/trace.txt").read(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+            output = "no trace available"
+            if trace_id in self.ran:
+                path = self.ran[trace_id] + "/trace.txt"
+                if not os.path.isfile(script_path): 
+                    output = "no trace for this CI job"
+                else:
+                    with open(path) as o: output = o.read()
+            return output, 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
         @application.route('/', methods=['GET'])
         def about():
@@ -327,18 +408,18 @@ class GakoCI:
 
         @application.route('/', methods=['POST'])
         def index():
-            event_type = request.headers.get('X-GitHub-Event', 'unknown')
-            event_id = request.headers.get('X-GitHub-Delivery', 'unknown')
+            event_type = request.headers.get('X-GitHub-Event', 'no-header-X-GitHub-Event')
+            event_id = request.headers.get('X-GitHub-Delivery', 'no-header-X-GitHub-Delivery')
             # if event_type == "ping": return ''
 
             # ping events have no POST data
             #payload=json.loads(request.data.decode('utf-8')) if len(request.data.decode('utf-8'))>0 else 'ss'
             payload = request.get_json()
             application.last_payload = payload
-            if event_type in application.log:
-                application.log[event_type].append(event_id)
+            if event_type in self.log:
+                self.log[event_type].append(event_id)
             else:
-                application.log[event_type] = [event_id]
+                self.log[event_type] = [event_id]
 
             osfd, payloadfile = mkstemp(suffix='.json')
             with os.fdopen(osfd, 'w') as pf:
@@ -364,6 +445,10 @@ class GakoCINgrok(GakoCI):
     def set_public_url(self):
         self.public_url = self.ngrokconfig["url"]
 
+    def get_url(self):
+        return self.ngrokconfig["url"]
+
+
     def setUp_ngrok(self, port, auth_token):
 
         os.system('killall ngrok')
@@ -380,6 +465,8 @@ class GakoCINgrok(GakoCI):
         tunnel_url = self.ngrok.start()
         self.ngrokconfig["url"] = tunnel_url
 
+    def shutdown(self):
+        super().shutdown()
 
 class NgrokTunnel:
     """ utility class for GakoCINgrok. Credits: https://opensourcehacker.com/2015159/03/27/testing-web-hook-http-api-callbacks-with-ngrok-in-python/ """

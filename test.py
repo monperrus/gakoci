@@ -6,6 +6,7 @@ Usage:
 - create an API token
 - export GITHUB_AUTH_USER=<username> (eg export GITHUB_AUTH_USER=monperrus)
 - export GITHUB_AUTH_TOKEN=<your token>
+
 - python3 -m unittest test
 """
 import unittest
@@ -20,7 +21,7 @@ import json
 import uuid
 import builtins
 import subprocess
-
+import socket as so 
 def create_pull_request(args):
     """ 
     only for testing purposes master hardcoded
@@ -47,15 +48,15 @@ class HelperTestCase(unittest.TestCase):
     """  python3 -m unittest test.HelperTestCase  """
 
     def runTest(self):
-        self.assertEqual("spoon", gakoci.get_core_info_push_file(
+        self.assertEqual("test", gakoci.get_core_info_push_file(
             'test/resources/push_event.json')['repo'])
-        self.assertEqual("INRIA", gakoci.get_core_info_push_file(
+        self.assertEqual("monperrus", gakoci.get_core_info_push_file(
             'test/resources/push_event.json')['owner'])
         self.assertEqual("master", gakoci.get_core_info_push_file(
             'test/resources/push_event.json')['branch'])
         self.assertEqual("385f1274627568a6d225061452abb3f3663ff57d", gakoci.get_core_info_push_file(
             'test/resources/push_event.json')['commit'])
-        self.assertEqual("https://api.github.com/repos/INRIA/spoon/statuses/385f1274627568a6d225061452abb3f3663ff57d",
+        self.assertEqual("https://api.github.com/repos/monperrus/test/statuses/385f1274627568a6d225061452abb3f3663ff57d",
                          gakoci.get_core_info_push_file('test/resources/push_event.json')['statuses_url'])
 
         # doc about pull requests
@@ -81,30 +82,28 @@ class HelperTestCase(unittest.TestCase):
 
 class CoreTestCase(unittest.TestCase):
     """ test the server using Ngrok (works on localhost and travis) """
-    repo_name = "test-repo"
     """ python3 -m unittest test.CoreTestCase """
 
-    def setUp(self):
+    def setUpAll(self, owner, repo_name):
         if os.path.exists('gakoci_config.py'):
             import gakoci_config
 
         if 'GITHUB_AUTH_USER' in dir(builtins): os.environ['GITHUB_AUTH_USER'] = builtins.GITHUB_AUTH_USER
         if 'GITHUB_AUTH_TOKEN' in dir(builtins): os.environ['GITHUB_AUTH_TOKEN'] = builtins.GITHUB_AUTH_TOKEN
         if 'NGROK_AUTH_TOKEN' in dir(builtins): os.environ['NGROK_AUTH_TOKEN'] = builtins.NGROK_AUTH_TOKEN
-        CoreTestCase.PROTOCOL_TEST_REPO = builtins.PROTOCOL_TEST_REPO if 'PROTOCOL_TEST_REPO' in dir(builtins) else "https"
-            
-        CoreTestCase.owner = os.environ['GITHUB_AUTH_USER']
-        CoreTestCase.repo_path = CoreTestCase.owner + "/" + CoreTestCase.repo_name
+        self.PROTOCOL_TEST_REPO = builtins.PROTOCOL_TEST_REPO if 'PROTOCOL_TEST_REPO' in dir(builtins) else "https"
+        
+        repo_path = owner + "/" + repo_name
+        
+        self.github = github.Github(login_or_token=os.environ["GITHUB_AUTH_TOKEN"])
+        self.repo = self.github.get_repo(repo_path)
 
-        self.setUp_github()
-        self.setUp_local()
-        self.setUp_flask()
+        self.setUp_local(owner = owner, repo_name = repo_name)
+        self.setUp_flask([repo_path], github_token=os.environ['GITHUB_AUTH_TOKEN'], gakoci_klass = gakoci.GakoCINgrok)
 
-    def setUp_flask(self):
+    def setUp_flask(self, repos, github_token = "", gakoci_klass = gakoci.GakoCI):
 
-        # curl -X POST http://localhost:5000/seriouslykill
-        app = gakoci.GakoCINgrok(repos=[CoreTestCase.repo_path], github_token=os.environ[
-                                 "GITHUB_AUTH_TOKEN"], hooks_dir="testhooks")
+        app = gakoci_klass(repos=repos, github_token=github_token, hooks_dir="testhooks")
         self.gakoci = app
         self.application = app.application
         # http://stackoverflow.com/questions/14814201/can-i-serve-multiple-clients-using-just-flask-app-run-as-standalone
@@ -112,34 +111,62 @@ class CoreTestCase(unittest.TestCase):
         thread.start()
         time.sleep(1)
 
-    def setUp_local(self):
-        if os.path.exists("test-repo"):
-            shutil.rmtree("test-repo")
+    def setUp_local(self, owner, repo_name):
+        owner = owner
+        repo_path = owner + "/" + repo_name
         if os.path.exists("testhooks"):
             shutil.rmtree("testhooks")
-        os.system("git clone " + CoreTestCase.PROTOCOL_TEST_REPO + "://github.com/" +
-                  CoreTestCase.repo_path + ".git")
         os.system('mkdir -p testhooks')
         # the hooks that will be used
         os.system('printf "#!/bin/sh\necho yeah | tee trace.txt"  > testhooks/push-' +
-                  CoreTestCase.owner + '-' + CoreTestCase.repo_name)
+                  owner + '-' + repo_name)
         os.system('printf "#!/bin/sh\necho foo | tee trace.txt"  > testhooks/push-' +
-                  CoreTestCase.owner + '-' + CoreTestCase.repo_name + 'foo')
-        os.system('printf "#!/bin/sh\necho bar | tee trace.txt"  > testhooks/push-' +
-                  CoreTestCase.owner + '-' + CoreTestCase.repo_name + 'bar')
+                  owner + '-' + repo_name + '-something')
+        # testing the shell support feature
+        os.system('printf "#!/bin/sh\ngit log"  > testhooks/push-' +
+                  owner + '-' + repo_name + '-shell.sh')
         os.system('chmod 755 testhooks/*')
 
-    def setUp_github(self):
-        self.github = github.Github(
-            login_or_token=os.environ["GITHUB_AUTH_TOKEN"])
-        self.repo = self.github.get_repo(CoreTestCase.repo_path)
-        for x in self.repo.get_hooks():
-            x.delete()
+            
+    def test0(self):
+      try:
+        """ the server does nothing if it receives an event for which it is not configured
+        python3 -m unittest test.CoreTestCase.test0
+        """
+        self.setUp_local(owner = "monperrus", repo_name = "test")
+        self.setUp_flask(["monperrus/somethingelse"])
+        with open("test/resources/push_event.json") as json:
+            requests.post(self.gakoci.get_url() + "/", data = json.read(),
+                          headers = {'X-GitHub-Event': 'push', 'Content-type': 'application/json'})
+        self.assertEqual(0, len(self.gakoci.perform_tasks_log))
+      finally: self.shutdown_server()
+      
+    def test1(self):
+      try:
+        """ the server triggers 3 actions 
+        python3 -m unittest test.CoreTestCase.test1
+        """
+        self.setUp_local(owner = "monperrus", repo_name = "test")
+        self.setUp_flask(["monperrus/test"])
+        with open("test/resources/push_event.json") as json:
+            requests.post(self.gakoci.get_url() + "/", data = json.read(),
+                          headers = {'X-GitHub-Event': 'push', 'Content-type': 'application/json'})
+        self.assertEqual(3, len(self.gakoci.perform_tasks_log))
+        self.assertTrue('push' in self.gakoci.log)
+      finally: self.shutdown_server()
 
-    def runTest(self):
+    def test2(self):
+      try:
+        """ global end to end test using github """
+        owner = "monperrus"
+        repo_name = "test-repo"
+        self.setUpAll(owner = owner, repo_name = repo_name)
+        os.system("git clone " + self.PROTOCOL_TEST_REPO + "://github.com/" +
+                  owner+ "/" + repo_name + ".git")
         r = self.repo
         # self.assertEqual(0, sum(1 for x in r.get_hooks()))
-        self.assertEqual(1, sum(1 for x in r.get_hooks()))
+        hooks = [x.config['url'] for x in r.get_hooks()]
+        self.assertTrue(self.gakoci.public_url in hooks)
         n_commits = sum(1 for x in r.get_commits())
         n_events = sum(1 for x in r.get_events())
         
@@ -155,8 +182,8 @@ class CoreTestCase(unittest.TestCase):
         # wait for Github callback a little bit
         time.sleep(1.5)
 
-        self.assertEqual(1, len(self.application.log['ping']))
-        self.assertEqual(1, len(self.application.log['push']))
+        self.assertEqual(1, len(self.gakoci.log['ping']))
+        self.assertEqual(1, len(self.gakoci.log['push']))
 
         self.assertEqual(
             "test-repo", self.application.last_payload["repository"]["name"])
@@ -173,8 +200,8 @@ class CoreTestCase(unittest.TestCase):
         # now testing pull requests
         os.system('rm testhooks/*')
         # creating one pull request file
-        os.system('printf "#!/bin/sh\necho pr\nls --format=horizontal > status.txt\n" > testhooks/pull_request-' +
-                  CoreTestCase.owner + '-' + CoreTestCase.repo_name+"-checkout")
+        os.system('printf "#!/bin/sh\nls --format=horizontal" > testhooks/pull_request-' +
+                  owner + '-' + repo_name+"-checkout.sh")
         os.system('chmod 755 testhooks/*')
 
         pr_branch = str(uuid.uuid4())
@@ -183,23 +210,20 @@ class CoreTestCase(unittest.TestCase):
         commit_id = subprocess.check_output(['sh', '-c', "cd test-repo/; git rev-parse HEAD"]).decode("utf-8").strip()
         print("pr commit: "+commit_id)
         create_pull_request({"token": os.environ[
-                            "GITHUB_AUTH_TOKEN"], "user": CoreTestCase.owner, "repo": CoreTestCase.repo_name, "head": pr_branch})
+                            "GITHUB_AUTH_TOKEN"], "user": owner, "repo": repo_name, "head": pr_branch})
 
-        # wait for Github callback a little bit
-        time.sleep(3)
+        # wait for Github callback a little bit (3 seconds is not enough)
+        time.sleep(5)
         statuses = [x for x in r.get_commit(commit_id).get_statuses()]
         self.assertEqual(
             1, len(statuses))
         # testing the status.txt feature and the checkout feature
-        self.assertEqual("README.md  status.txt\n", statuses[0].description)
-        self.assertEqual(1, len(self.application.log['pull_request']))
-
-    def tearDown(self):
-        # Stop webserver
-        requests.post(self.gakoci.ngrokconfig[
-                      "url"] + "/" + self.application.killurl)
-
-        # Stop tunnelling
-        if self.gakoci.ngrok:
-            self.gakoci.ngrok.stop()
-            self.gakoci.ngrok = None
+        self.assertEqual("README.md", statuses[0].description)
+        self.assertEqual(1, len(self.gakoci.log['pull_request']))
+      finally: 
+          self.shutdown_server()
+          if os.path.exists("test-repo"):
+            shutil.rmtree("test-repo")
+    def shutdown_server(self):
+        # Stop webserver, should shutdown
+        requests.post(self.gakoci.get_url() + "/" + self.application.killurl)

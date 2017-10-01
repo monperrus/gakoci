@@ -2,6 +2,11 @@
 
 language: python
 
+sudo: required
+
+services:
+  - docker
+
 env:
   global: 
     # NGROK_AUTH_TOKEN
@@ -12,7 +17,7 @@ env:
     - secure: "n22ni2jpTQkx1HVy5W/gLvVGaBoaFV3Gb+iclPYy9MpW5qybSUTegOQX/SaShw0fBV7zr5RMdTIGQm911kzYRqaFgqqwOcqvKlaDsA6/KbKnPiJNlEHCfrpkhVVNHDN02hzYQimki6gtklUyc4KqQsiR0sy0Rw9wTvjeDWwnP6utPfNohpmhuKtPadTkYOqDSMYXgNNQ39LQ+Q51jKXIXN2ZrYik4MpgT5kVmrl+eXoFxsrNv9jvhl67FpPrQAxzLDoguIWNompuWBXvX2dbsaBzvVc1k7zIAJ4ufJzq0LjGIJisp57PWXFyZyC3NFDhh2kEUTXlDrrg8ChLVJ0mGBlgHockecG9Rcr9QEz9tnuv4xWg8puHlz+3Z13gcYRacUPVCQN0T5Mq94D/Me7F5KI8AeOeyG9hjL2nhyOPmWDyGI5f82jVOt5KjMR60vhMwZzjv1WoT4YdtYVN5qR/vLW8RaY67e6UiltQutnD16TxCQYe4oQW5CCqVx1f/9CzTy5/eDmrjSeFzcvt2hFHDekdluBkkjuqu7Wb5qFJuy35ocX0PvSxp4wAZccrr/3UNkifNMb8xF7AB9SBrXBtixK86fdKGhCVaqgtq1gry+Qqj1xbjPv+7XJvjaqxYwLoSfVlmDpWKaBHx27yLRDH4R5OWjnyawOUYKb1PzUPKl8="
 
 python:
-  - "3.6"
+  - "3.5"
 
 install:
   - pip install -r requirements.txt
@@ -25,4 +30,4 @@ install:
 
 
 script:
-  - python -m unittest test
+  - python3 -m unittest test
