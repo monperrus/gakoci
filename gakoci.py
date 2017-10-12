@@ -45,6 +45,9 @@ class PushAction(EventAction):
         self.scripts = []
         self.meta_info = get_core_info_push_file(payload_path)
         self.meta_info['payload_path'] = payload_path
+        self.meta_info['build_owner'] =  self.meta_info['owner']
+        self.meta_info['build_repo'] =  self.meta_info['repo']
+        
 
 
     def arguments(self):
@@ -64,6 +67,8 @@ class PullRequestAction(EventAction):
         self.scripts = []
         self.meta_info = get_core_info_pull_request_file(payload_path)
         self.meta_info['payload_path'] = payload_path
+        self.meta_info['build_owner'] =  self.meta_info['base_owner']
+        self.meta_info['build_repo'] =  self.meta_info['base_repo']
 
     def arguments(self):
         return [self.meta_info['payload_path'], # $1 in script
@@ -312,8 +317,8 @@ class GakoCI:
         if event_type == "pull_request":
             result = PullRequestAction(self, payload_path)
         result.meta_info['event_type'] = event_type
-        if not 'owner' in result.meta_info: result.meta_info['owner'] = "not_detected"
-        if not 'repo' in result.meta_info: result.meta_info['repo'] = "not_detected"
+        if not 'build_owner' in result.meta_info: result.meta_info['build_owner'] = "not_detected"
+        if not 'build_repo' in result.meta_info: result.meta_info['build_repo'] = "not_detected"
         return result
 
     def perform_tasks(self, event_type, payload_path):
@@ -323,8 +328,9 @@ class GakoCI:
         self.perform_tasks_log = []
         ## loading the file-based tasks
         tasks = list(self.tasks) # the already registered ones
-        repo = event_action.meta_info['owner'] + "/" + event_action.meta_info['repo'] 
+        repo = event_action.meta_info['build_owner'] + "/" + event_action.meta_info['build_repo'] 
         
+        # we only handle the repos for which it is configured
         if repo not in self.repos: return
 
         globpath = os.path.join(self.hooks_dir, event_type +"-" + repo.replace('/','-') + '*')
