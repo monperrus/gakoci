@@ -57,10 +57,7 @@ You can have several push jobs for the same repo, by simply adding a suffix: `ho
 
 ### Cloning the repo
 
-If the job file is a shell script whose file name ends with `.sh`:
-
-* the git repository is automatically checkout
-* the following variable are available
+If the job file is a shell script whose file name ends with `.sh`, the git repository is automatically checkout and the following variable are available
 
     branch="master"
     statuses_url="https://api.github.com/repos/monperrus/test/statuses/385f1274627568a6d225061452abb3f3663ff57d"
@@ -70,17 +67,18 @@ If the job file is a shell script whose file name ends with `.sh`:
     repo="test"
     owner="monperrus"
 
+
 ### Push jobs
 
 GakoCI works with push events as follows. CI scripts must start with `push` (eg ``hooks/push-foobar-testrepo`) and job files take 6 arguments:
 
     <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1>
-        $1             $2            $3          $4         $5         $5
+        $1             $2            $3          $4         $5         $6
     # useful for having scripts compatible  with Travis
     export TRAVIS_REPO_SLUG=$3/$4
     push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
-To checkout the code in a push CI script, one can yse the automatic merge commit by github:
+To checkout the code in a push CI script, one can use the automatic merge commit by github:
 
     git init
     git remote -v add origin git://github.com/$3/$4.git
@@ -97,7 +95,7 @@ GakoCI can also work with pull requests events. CI scripts must start with `push
     export TRAVIS_REPO_SLUG=$3/$4
     push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
-To checkout the code in a pull request CI script, one can yse the automatic merge commit by github:
+To checkout the code in a pull request CI script, one can use the automatic merge commit by github:
 
     # $7 is <base_owner>
     # $8 is <base_repo>
