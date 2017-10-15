@@ -80,16 +80,33 @@ GakoCI works with push events as follows. CI scripts must start with `push` (eg 
     export TRAVIS_REPO_SLUG=$3/$4
     push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
+To checkout the code in a push CI script, one can yse the automatic merge commit by github:
+
+    git init
+    git remote -v add origin git://github.com/$3/$4.git
+    git fetch origin $5:gakoci
+    git checkout gakoci
+
 ### Pull-request jobs
 
 GakoCI can also work with pull requests events. CI scripts must start with `push` (eg ``hooks/pull_request-foobar-testrepo`) and job files take 6 arguments:
 
     <payload.json> <event_type> <repo_owner> <repo_name> <branch> <commit_sha1> <base_owner> <base_repo> <pr_number>
-        $1             $2            $3          $4         $5         $5           $6           $7          $8
+        $1             $2            $3          $4         $5         $6           $7           $8          $9
     # useful for having scripts compatible with Travis
     export TRAVIS_REPO_SLUG=$3/$4
     push-monperrus-spoon /home/spirals/mmonperr/tmpmzhmhr3d push monperrus spoon cleaning1 4c651dae33df8d8b339487a2c5d825f1c99e54e7
 
+To checkout the code in a pull request CI script, one can yse the automatic merge commit by github:
+
+    # $7 is <base_owner>
+    # $8 is <base_repo>
+    # $9 is <branch>
+    git init
+    git remote -v add origin git://github.com/$7/$8.git
+    git fetch origin pull/$9/merge:gakoci
+    git checkout gakoci
+ 
 
 ## Motivation
 
