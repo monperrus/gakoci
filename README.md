@@ -107,6 +107,14 @@ To checkout the code in a pull request CI script, one can yse the automatic merg
     git fetch origin pull/$9/merge:gakoci
     git checkout gakoci
  
+If the pull-request job is in python, it contains
+
+```python
+subprocess.Popen(['git', 'init']).communicate()
+subprocess.Popen(['git', 'remote', 'add', 'origin', 'git://github.com/'+sys.argv[7]+'/'+sys.argv[8]+'.git']).communicate()
+subprocess.Popen(['git', 'fetch', 'origin', 'pull/'+sys.argv[9]+'/merge:gakoci']).communicate()
+subprocess.Popen(['git', 'checkout', 'gakoci']).communicate()
+```
 
 ## Motivation
 
