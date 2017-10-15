@@ -402,7 +402,7 @@ class GakoCI:
             output = "no trace available"
             if trace_id in self.ran:
                 path = self.ran[trace_id] + "/trace.txt"
-                if not os.path.isfile(script_path): 
+                if not os.path.isfile(path): 
                     output = "no trace for this CI job"
                 else:
                     with open(path) as o: output = o.read()
